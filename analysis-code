@@ -142,3 +142,82 @@ dp1 = sc.pl.dotplot(
     return_fig=True
 )
 # dp1.savefig(outdir + "各cluster细胞注释点图.pdf", dpi=300, bbox_inches="tight")
+# ====================================================================
+# 亚群分类分析（亚细胞注释）
+# ===================== 你的标记基因（大类 + 小类）=====================
+marker_groups = {
+    "Nephron": {
+        "PT": ["Slc13a3","Spp2"],
+        "New PT": ["Cyp4a10", "Slc13a1"],
+        "PT-S2/S3": ["Kap"],
+        "TAL": ["Umod", "Slc6a18","Slc12a1"],
+        "DCT": ["Slc12a3","Calb1","Klk1"]
+    },
+    "Interstitial": {
+        "Adipocyte": ["Retn"],
+        "epithelium":["Upk3a","Hspa1b","Acta2"],
+        "Vascular":["Dcn","Aqp1"]
+    },
+    "Collecting duct": {
+        "Principal": ["Aqp2", "Aqp3","Hsd11b2"]
+    },
+    "Immune cells": {
+        "Macrophages": ["Ly6c1"],
+        "M2": ["Tyrobp"]
+    },
+    "Podocyte": {
+        "Renal corpuscle": ["Podxl"]
+    }
+}
+
+adata = kidney_adata
+
+# ===================== 自动生成 【大类 | 小类】 分组标签 =====================
+all_genes = []
+group_positions = []
+group_labels = []
+start = 0
+
+for big_class, sub_dict in marker_groups.items():
+    for sub_name, genes in sub_dict.items():
+        valid_genes = [g for g in genes if g in adata.var_names]
+        if len(valid_genes) == 0:
+            continue
+        
+        # 标签格式：大类 | 小类  （清晰展示层级）
+        label = f"{big_class} | {sub_name}"
+        
+        end = start + len(valid_genes)
+        group_positions.append((start, end-1))
+        group_labels.append(label)
+        all_genes.extend(valid_genes)
+        start = end
+
+# ===================== Cluster 顺序 =====================
+cluster_order = [
+    "0","2","9","19","1","10","17","14","3","7","6","20",
+    "13","18","15","21","11","22",
+    "4","5","12",
+    "16","23",
+    "8"
+]
+
+# ===================== 绘图（100% 兼容所有版本）=====================
+dp = sc.pl.dotplot(
+    adata,
+    var_names=all_genes,
+    groupby="seurat_clusters",
+    categories_order=cluster_order,
+    
+    var_group_positions=group_positions,
+    var_group_labels=group_labels,
+    
+    standard_scale="var",
+    dot_max=0.8,
+    dot_min=0.1,
+    figsize=(16, 10),
+    return_fig=True
+)
+
+# 保存
+# dp.savefig(outdir + "细胞类型注释_大类+小类点图.pdf", dpi=300, bbox_inches="tight")
