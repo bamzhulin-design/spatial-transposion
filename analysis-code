@@ -1,0 +1,144 @@
+import scanpy as sc
+import pandas as pd
+import numpy as np
+import seaborn as sns
+import matplotlib.pyplot as plt
+import os
+import anndata as ad
+
+# 数据加载
+kidney_file = '/home/zhengyanb/HJ-空转/BMK250409-CR265-ZX01-0101/BMK_DATA_20250804180821_1/03.output/WTkidney_vs_AMLkidney.clustree_result.final.h5ad'
+outdir = "/home/zhengyanb/st-analysis/baimaike_result/kidney_WTvsAML/"
+kidney_adata = sc.read_h5ad(kidney_file)
+# 查看数据
+print(kidney_adata)
+print("kideny_shape:", kidney_adata.shape)
+
+sc.settings.verbosity = 3
+sc.set_figure_params(figsize=(6, 6), dpi=100, facecolor="white")
+# 给sample重新命名
+kidney_adata.obs["condition"] = kidney_adata.obs["sample"].map({
+    0: "WTkidney",
+    1: "AMLkidney"
+})
+
+# 给细胞注释
+cluster_to_group = {
+    # Nephron 肾单位
+    "0": "Nephron",
+    "1": "Nephron",
+    "2": "Nephron",
+    "3": "Nephron",
+    "6": "Nephron",
+    "7": "Nephron",
+    "9": "Nephron",
+    "10": "Nephron",
+    "14": "Nephron",
+    "17": "Nephron",
+    "19": "Nephron",
+    "20": "Nephron",
+    # Collecting Duct 集合管
+    "4": "Collecting Duct",
+    "5": "Collecting Duct",
+    "12": "Collecting Duct",
+    # Podocyte 足细胞
+    "8": "Podocyte",
+    # Interstitial 间质
+    "11": "Interstitial",
+    "13": "Interstitial",
+    "15": "Interstitial",
+    "18": "Interstitial",
+    "21": "Interstitial",
+    
+    # Endothelial 内皮
+    "22": "Endothelial",
+    # Immune 免疫
+    "16": "Immune",
+    "23": "Immune"
+}
+# 把大类添加到 adata.obs 里
+kidney_adata.obs['cell_group'] = kidney_adata.obs['seurat_clusters'].astype(str).map(cluster_to_group)
+
+marker_groups = {
+    # 黄色：Nephron 肾单位
+    "Nephron": {
+        "PT": ["Slc13a3","Spp2"],
+        "New PT": ["Cyp4a10", "Slc13a1"],
+        "PT-S2/S3": ["Kap"],
+        "TAL": ["Umod", "Slc6a18","Slc12a1"],
+        "DCT": ["Slc12a3","Calb1","Klk1"]
+    },
+    # 绿色：Interstitial cells 间质细胞
+    "Interstitial": {
+        "Adipocyte": ["Retn"],
+        "epithelium":["Upk3a","Hspa1b","Acta2"],
+        "Vascular":["Dcn","Aqp1"]
+    },
+    # 蓝色：Principal cells
+    "Collecting duct": {
+        "Principal": ["Aqp2", "Aqp3","Hsd11b2"]
+    },
+    # 红色：Immune cells 免疫细胞
+    "Immune cells": {
+        "Macrophages": ["Ly6c1"],
+        "M2": ["Tyrobp"]
+    },
+    # 灰色：肾小球足细胞
+    "Podocyte": {
+        "Renal corpuscle": ["Podxl"]
+    }
+}
+adata = kidney_adata
+# ----------------------
+# 细胞注释点图
+# ----------------------
+all_genes = []
+var_group_positions = []
+var_group_labels = []
+start = 0
+# 遍历上面论文的5大类细胞
+for big_class, sub_dict in marker_groups.items():
+    # 收集该大类所有基因
+    class_genes = []
+    for sub_type, genes in sub_dict.items():
+        class_genes.extend(genes)
+    # 只保留你数据里存在的基因
+    valid_genes = [g for g in class_genes if g in adata.var_names]
+    if len(valid_genes)==0:
+        continue
+    # 记录分组起止位置（scanpy左侧大类栏必备）
+    end = start + len(valid_genes)
+    var_group_positions.append((start, end-1))
+    var_group_labels.append(big_class)
+    all_genes.extend(valid_genes)
+    start = end
+
+cluster_order = [
+    # 肾单位细胞
+    "0","2","9","19","1","10","17","14","3","7","6","20",
+    # 间质细胞
+    "13","18","15","21","11","22",
+    # 集合管
+    "4","5","12",
+    # 免疫细胞
+    "16","23",
+    # 足细胞
+    "8"
+]
+# ----------------------
+# 绘图
+# ----------------------
+dp1 = sc.pl.dotplot(
+    adata,
+    var_names=all_genes,                # 论文标记基因
+    groupby="seurat_clusters",          # 横轴=你的空间聚类
+    var_group_positions=var_group_positions,  # 左侧大类分组位置
+    var_group_labels=var_group_labels,         # 左侧大类名字（5大分类）
+    standard_scale="var",              # 基因标准化，和论文表达量一致
+    categories_order=cluster_order,
+    dot_max=0.8, dot_min=0.1,          # 圆点大小范围，和论文一致
+    figsize=(12, 8),                   # 图大小，和论文比例一致
+    title="",
+    return_fig=True
+)
+# dp1.savefig(outdir + "各cluster细胞注释点图.pdf", dpi=300, bbox_inches="tight")
