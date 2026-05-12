@@ -1,0 +1,32 @@
+# 选择关键亚群做分析（PT和TAL）
+target_subtypes = ["New PT", "TAL"]
+# ===================== 1. 筛选目标亚群：只保留 New PT 和 TAL =====================
+adata_subset = kidney_adata[kidney_adata.obs["subtype"].isin(["New PT", "TAL"])].copy()
+# 查看一下细胞数量
+print(adata_subset.obs[["subtype", "orig.ident"]].value_counts().sort_index())
+# ===================== 2. 差异分析：New PT (AML vs WT) =====================
+adata_newpt = kidney_adata[kidney_adata.obs["subtype"] == "New PT"].copy()
+sc.pp.log1p(adata_newpt)
+# 做差异基因
+# 运行差异分析
+sc.tl.rank_genes_groups(
+    adata_newpt,
+    groupby="orig.ident",
+    groups=["AMLkidney"],
+    reference="WTkidney",
+    method="wilcoxon",
+)
+
+# ✅ 关键修复：必须加 ["AML"]
+newpt_de = pd.DataFrame({
+    'gene': adata_newpt.uns['rank_genes_groups']['names']["AMLkidney"],
+    'log2fc': adata_newpt.uns['rank_genes_groups']['logfoldchanges']["AMLkidney"],
+    'pval': adata_newpt.uns['rank_genes_groups']['pvals']["AMLkidney"],
+    'padj': adata_newpt.uns['rank_genes_groups']['pvals_adj']["AMLkidney"],
+})
+
+# 过滤
+#newpt_de = newpt_de[(newpt_de['padj'] < 0.05) & (newpt_de['log2fc'].abs() > 0.5)]
+
+print("New PT 上调：", (newpt_de['log2fc'] > 0).sum())
+print("New PT 下调：", (newpt_de['log2fc'] < 0).sum())
